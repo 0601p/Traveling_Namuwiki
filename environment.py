@@ -6,7 +6,7 @@ from typing import Mapping, Sequence
 from datasets import load_dataset
 
 from models import Model
-from utils import ACTIONS_DATASET, Action, Page, Title
+from utils import ACTIONS_DATASET, RAW_DATASET, Action, Page, Title
 
 
 Graph = dict[Title, list[Action]]
@@ -35,10 +35,15 @@ class SearchResult:
 class NamuwikiEnvironment:
     """State/action environment backed by Traveling_Namuwiki_Actions."""
 
-    def __init__(self, graph: Mapping[Title, Sequence[Action]]) -> None:
+    def __init__(
+        self,
+        graph: Mapping[Title, Sequence[Action]],
+        raws: Mapping[Title, str] | None = None,
+    ) -> None:
         self.graph: Graph = {
             title: list(dict.fromkeys(actions)) for title, actions in graph.items()
         }
+        self.raws: dict[Title, str] = dict(raws or {})
 
     @classmethod
     def from_dataset(
@@ -46,6 +51,8 @@ class NamuwikiEnvironment:
         dataset_path: str = ACTIONS_DATASET,
         *,
         split: str = "train",
+        raw_dataset_path: str = RAW_DATASET,
+        load_raw: bool = False,
     ) -> NamuwikiEnvironment:
         graph: Graph = {}
         for row in load_dataset(dataset_path, split=split):
@@ -53,10 +60,21 @@ class NamuwikiEnvironment:
             if not title:
                 continue
             graph[title] = list(row["actions"])
-        return cls(graph)
+
+        raws: dict[Title, str] = {}
+        if load_raw:
+            for row in load_dataset(raw_dataset_path, split=split):
+                title = str(row.get("title") or "").strip()
+                if title in graph and title not in raws:
+                    raws[title] = row["text"]
+
+        return cls(graph, raws)
 
     def actions(self, title: Title) -> Sequence[Action]:
         return self.graph.get(title, [])
+
+    def raw(self, title: Title) -> str:
+        return self.raws.get(title, "")
 
     def walk(
         self,
@@ -72,7 +90,11 @@ class NamuwikiEnvironment:
         current = start_title
 
         for _ in range(max_steps):
-            page = Page(title=current, actions=self.actions(current))
+            page = Page(
+                title=current,
+                actions=self.actions(current),
+                raw=self.raw(current),
+            )
             next_title = model.sample(page, target_title)
 
             if next_title is None:
