@@ -10,7 +10,7 @@ from typing import Iterable
 from datasets import load_dataset
 
 from environment import NamuwikiEnvironment
-from models import available_models, create_model
+from models import add_model_args, available_models, create_model
 from utils import ACTIONS_DATASET, PATHS_DATASET, Title
 
 
@@ -62,7 +62,11 @@ def mean(values: list[float]) -> float | None:
 
 def evaluate(args: argparse.Namespace) -> dict:
     env = NamuwikiEnvironment.from_dataset(args.actions_path)
-    model = create_model(args.model)
+    model = create_model(
+        args.model,
+        embeddings_path=args.embeddings_path,
+        weights_path=args.weights_path,
+    )
     failure_distance = (
         args.failure_distance
         if args.failure_distance is not None
@@ -161,6 +165,7 @@ def parse_args() -> argparse.Namespace:
         choices=available_models(),
         help="Model used to sample actions.",
     )
+    add_model_args(parser)
     parser.add_argument(
         "--actions-path",
         default=ACTIONS_DATASET,

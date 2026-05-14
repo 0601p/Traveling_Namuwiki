@@ -19,6 +19,9 @@ dataset provides evaluation examples with `start_title`, `target_title`, and
 pip install datasets
 ```
 
+If you want to use the linear embedding model, no extra package is required, but
+you do need a local embedding file.
+
 ## Inference
 
 Run a single walk from a start title to a target title:
@@ -85,3 +88,44 @@ Models live under `models/`.
 
 To add a model, implement a `Model` subclass and register it in
 `models/__init__.py`.
+
+## Linear Model
+
+`linear` scores each outgoing link with a linear function of:
+
+- the candidate link embedding
+- the target document embedding
+
+The model expects a local embedding file passed via `--embeddings-path`. The
+file can be either:
+
+- a JSON object: `{"title": [0.1, 0.2, ...]}`
+- a JSON list: `[{"title": "A", "embedding": [...]}, ...]`
+- a JSONL file with one object per line and fields `title` and `embedding`
+
+Optional linear weights can be passed via `--weights-path`. Supported formats:
+
+- `{"weights": [...] , "bias": 0.0}` where `weights` has size `2 * dim`
+- `{"link_weights": [...], "target_weights": [...], "bias": 0.0}`
+
+If `--weights-path` is omitted, the model uses all-ones weights and zero bias.
+
+Example inference:
+
+```
+python inference.py \
+  --start-title "Dead 6" \
+  --target "Command & Conquer" \
+  --model linear \
+  --embeddings-path data/title_embeddings.json
+```
+
+Example evaluation:
+
+```
+python evaluate_paths.py \
+  --split validation \
+  --model linear \
+  --embeddings-path data/title_embeddings.json \
+  --weights-path data/linear_weights.json
+```

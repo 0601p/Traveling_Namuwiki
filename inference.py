@@ -4,7 +4,7 @@ import argparse
 import json
 
 from environment import NamuwikiEnvironment
-from models import create_model
+from models import add_model_args, create_model
 from utils import ACTIONS_DATASET
 
 
@@ -20,6 +20,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--start-title", required=True)
     parser.add_argument("--target", required=True)
     parser.add_argument("--model", default="randomwalk")
+    add_model_args(parser)
     parser.add_argument("--max-steps", type=int, default=10)
     parser.add_argument(
         "--allow-cycle",
@@ -34,7 +35,11 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     env = NamuwikiEnvironment.from_dataset(args.actions_path)
-    model = create_model(args.model)
+    model = create_model(
+        args.model,
+        embeddings_path=args.embeddings_path,
+        weights_path=args.weights_path,
+    )
     result = env.walk(
         start_title=args.start_title,
         target_title=args.target,
