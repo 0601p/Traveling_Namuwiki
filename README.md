@@ -95,6 +95,7 @@ To add a model, implement a `Model` subclass and register it in
 
 - the candidate link embedding
 - the target document embedding
+- their elementwise interaction
 
 The model expects a local embedding file passed via `--embeddings-path`. The
 file can be either:
@@ -105,10 +106,11 @@ file can be either:
 
 Optional linear weights can be passed via `--weights-path`. Supported formats:
 
-- `{"weights": [...] , "bias": 0.0}` where `weights` has size `2 * dim`
-- `{"link_weights": [...], "target_weights": [...], "bias": 0.0}`
+- `{"weights": [...] , "bias": 0.0}` where `weights` has size `2 * dim` or `3 * dim`
+- `{"link_weights": [...], "target_weights": [...], "interaction_weights": [...], "bias": 0.0}`
 
-If `--weights-path` is omitted, the model uses all-ones weights and zero bias.
+If `--weights-path` is omitted, the model defaults to a similarity-style scorer
+with zero link and target weights, all-ones interaction weights, and zero bias.
 
 Example inference:
 
@@ -129,3 +131,21 @@ python evaluate_paths.py \
   --embeddings-path data/title_embeddings.json \
   --weights-path data/linear_weights.json
 ```
+
+## Embedding Generation
+
+You can generate title-keyed embeddings from the actions graph and raw Namuwiki
+documents with:
+
+```
+python generate_embeddings.py \
+  --output-path outputs/title_embeddings.json \
+  --text-source raw_or_title
+```
+
+The script collects every graph title and outgoing action title, then embeds one
+text per title:
+
+- `title`: embed the title string itself
+- `raw`: require raw document text for every title
+- `raw_or_title`: use raw document text when available, otherwise fall back to the title

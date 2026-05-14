@@ -86,9 +86,14 @@ def load_weights(
     path: str | Path | None,
     *,
     embedding_dim: int,
-) -> tuple[list[float], list[float], float]:
+) -> tuple[list[float], list[float], list[float], float]:
     if path is None:
-        return [1.0] * embedding_dim, [1.0] * embedding_dim, 0.0
+        return (
+            [0.0] * embedding_dim,
+            [0.0] * embedding_dim,
+            [1.0] * embedding_dim,
+            0.0,
+        )
 
     source = Path(path)
     if not source.exists():
@@ -102,20 +107,30 @@ def load_weights(
 
     if "weights" in payload:
         weights = as_float_list(payload["weights"], name="weights")
-        if len(weights) != embedding_dim * 2:
+        if len(weights) == embedding_dim * 2:
+            link_weights = weights[:embedding_dim]
+            target_weights = weights[embedding_dim:]
+            interaction_weights = [0.0] * embedding_dim
+        elif len(weights) == embedding_dim * 3:
+            link_weights = weights[:embedding_dim]
+            target_weights = weights[embedding_dim : embedding_dim * 2]
+            interaction_weights = weights[embedding_dim * 2 :]
+        else:
             raise ValueError(
-                f"'weights' must have size {embedding_dim * 2}, got {len(weights)}"
+                f"'weights' must have size {embedding_dim * 2} or {embedding_dim * 3}, got {len(weights)}"
             )
-        link_weights = weights[:embedding_dim]
-        target_weights = weights[embedding_dim:]
     else:
         link_weights = as_float_list(
-            payload.get("link_weights", [1.0] * embedding_dim),
+            payload.get("link_weights", [0.0] * embedding_dim),
             name="link_weights",
         )
         target_weights = as_float_list(
-            payload.get("target_weights", [1.0] * embedding_dim),
+            payload.get("target_weights", [0.0] * embedding_dim),
             name="target_weights",
+        )
+        interaction_weights = as_float_list(
+            payload.get("interaction_weights", [1.0] * embedding_dim),
+            name="interaction_weights",
         )
         if len(link_weights) != embedding_dim:
             raise ValueError(
@@ -125,13 +140,17 @@ def load_weights(
             raise ValueError(
                 f"target_weights must have size {embedding_dim}, got {len(target_weights)}"
             )
+        if len(interaction_weights) != embedding_dim:
+            raise ValueError(
+                f"interaction_weights must have size {embedding_dim}, got {len(interaction_weights)}"
+            )
 
     bias = float(payload.get("bias", 0.0))
-    return link_weights, target_weights, bias
+    return link_weights, target_weights, interaction_weights, bias
 
 
 class LinearModel(Model):
-    """Score candidate links with a linear model over link and target embeddings."""
+    """Score candidate links with a linear model over link, target, and interaction features."""
 
     def __init__(
         self,
@@ -141,7 +160,12 @@ class LinearModel(Model):
     ) -> None:
         self.embeddings = load_embeddings(embeddings_path)
         self.embedding_dim = len(next(iter(self.embeddings.values())))
-        self.link_weights, self.target_weights, self.bias = load_weights(
+        (
+            self.link_weights,
+            self.target_weights,
+            self.interaction_weights,
+            self.bias,
+        ) = load_weights(
             weights_path,
             embedding_dim=self.embedding_dim,
         )
@@ -151,9 +175,14 @@ class LinearModel(Model):
         target_embedding = self.embeddings.get(target)
         if action_embedding is None or target_embedding is None:
             return None
+        interaction_embedding = [
+            link_value * target_value
+            for link_value, target_value in zip(action_embedding, target_embedding)
+        ]
         return (
             dot(self.link_weights, action_embedding)
             + dot(self.target_weights, target_embedding)
+            + dot(self.interaction_weights, interaction_embedding)
             + self.bias
         )
 

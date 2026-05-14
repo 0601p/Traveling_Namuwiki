@@ -17,5 +17,12 @@ outputs/
 eval_outputs/
 predictions/
 *.jsonl.tmp
+requirements.txt
+example.sh
+slurm/
+*.sbatch
+*.slurm
+slurm-*.out
+slurm-*.err
 
 .ipynb_checkpoints/
