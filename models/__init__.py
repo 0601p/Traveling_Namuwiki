@@ -21,7 +21,7 @@ def create_model(name: str) -> Model:
 
 
 def available_models() -> list[str]:
-    return ["randomwalk", "semantic_walk"]
+    return sorted(MODEL_REGISTRY)
 
 
 __all__ = [
