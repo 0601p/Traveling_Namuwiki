@@ -12,10 +12,10 @@ if TYPE_CHECKING:
     from sentence_transformers import SentenceTransformer
 
 
-class GreedyEmbeddingSimilarity(Model):
+class SemanticWalk(Model):
     """Choose the outgoing action with the highest semantic similarity to target.
 
-    This is a greedy semantic-search baseline using multilingual E5 embeddings.
+    This is a semantic walking baseline using multilingual E5 embeddings.
     The model is inference-only and does not perform any training.
     """
 
@@ -32,7 +32,7 @@ class GreedyEmbeddingSimilarity(Model):
             from sentence_transformers import SentenceTransformer
         except ImportError as exc:
             raise ImportError(
-                "GreedyEmbeddingSimilarity requires sentence-transformers. "
+                "SemanticWalk requires sentence-transformers. "
                 "Install it with: pip install sentence-transformers torch numpy"
             ) from exc
 

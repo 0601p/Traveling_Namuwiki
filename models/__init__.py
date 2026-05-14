@@ -4,10 +4,12 @@ from utils import Action, Page, Title
 
 from .base import Model
 from .randomwalk import RandomWalk
+from .semantic_walk import SemanticWalk
 
 
 MODEL_REGISTRY: dict[str, type[Model]] = {
     "randomwalk": RandomWalk,
+    "semanticwalk": SemanticWalk,
 }
 
 
@@ -19,7 +21,7 @@ def create_model(name: str) -> Model:
 
 
 def available_models() -> list[str]:
-    return sorted(MODEL_REGISTRY)
+    return ["randomwalk", "semantic_walk"]
 
 
 __all__ = [
@@ -27,6 +29,7 @@ __all__ = [
     "Model",
     "Page",
     "RandomWalk",
+    "SemanticWalk",
     "Title",
     "available_models",
     "create_model",
