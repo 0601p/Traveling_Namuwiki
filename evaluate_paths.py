@@ -7,8 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-from datasets import load_dataset
-
+from dataset_utils import load_rows
 from environment import NamuwikiEnvironment
 from models import available_models, create_model
 from utils import ACTIONS_DATASET, PATHS_DATASET, Title
@@ -42,8 +41,7 @@ def parse_hop(value: object) -> int:
 
 
 def iter_path_examples(dataset_path: str, split: str) -> Iterable[PathExample]:
-    dataset = load_dataset(dataset_path, split=split)
-    for row in dataset:
+    for row in load_rows(dataset_path, split=split):
         yield row_to_example(row)
 
 

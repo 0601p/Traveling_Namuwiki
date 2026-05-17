@@ -8,14 +8,36 @@ env/
 
 .env
 .env.*
+.cache/*
 
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 
-outputs/
+outputs/*
 eval_outputs/
 predictions/
 *.jsonl.tmp
 
+# Legacy local checkpoints. Current experiment checkpoints live under outputs/runs/<run_name>/.
+checkpoints/
+
+# Deprecated / smoke / early low-performing runs.
+# These are redundant with outputs/, but listed here to document runs that should not be used in reports.
+# Deprecated early training/evaluation implementations not used for final runs.
+evaluate_bert_random_init.py
+train_bert_target_a2c_v2.py
+train_goal_ppo_v3.py
+train_guided_target_a2c.py
+train_history_lm_ppo_v5.py
+train_implicit_reward_ppo_v4.py
+train_neural_target_a2c.py
+
+# Deprecated early model implementations not used by the final registry.
+models/bert_target_a2c_v2.py
+models/guided_target_a2c.py
+
 .ipynb_checkpoints/
+
+scripts/*
+reports/*
