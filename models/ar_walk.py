@@ -14,7 +14,7 @@ from abc import ABC, abstractmethod
 from collections import Counter, OrderedDict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Mapping, Sequence, cast
+from typing import Callable, Mapping, Sequence, cast
 
 import torch
 from sentence_transformers import SentenceTransformer
@@ -274,6 +274,8 @@ class ReinforceConfig:
     temperature: float = 1.0
     stop_on_cycle: bool = True
     log_every: int = 50
+    hindsight_goals_per_episode: int = 4
+    hindsight_loss_weight: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -328,6 +330,62 @@ class RandomPairTaskSampler(TaskSampler):
         return TrainingTask(start_title=start, target_title=target)
 
 
+class RandomWalkTaskSampler(TaskSampler):
+    """Sample targets that are reachable from the start by a short random walk."""
+
+    def __init__(
+        self,
+        graph: Mapping[Title, Sequence[Action]],
+        *,
+        max_depth: int,
+        seed: int | None = None,
+        allow_same_title: bool = False,
+        max_attempts: int = 64,
+    ) -> None:
+        if max_depth < 1:
+            raise ValueError("max_depth must be at least 1.")
+
+        self.graph = graph
+        self.start_titles = [title for title, actions in graph.items() if actions]
+        if not self.start_titles:
+            raise ValueError("The action graph has no pages with outgoing actions.")
+
+        self.max_depth = max_depth
+        self.rng = random.Random(seed)
+        self.allow_same_title = allow_same_title
+        self.max_attempts = max_attempts
+
+    def sample(self) -> TrainingTask:
+        for _ in range(self.max_attempts):
+            start = self.rng.choice(self.start_titles)
+            path = [start]
+            current = start
+
+            depth = self.rng.randint(1, self.max_depth)
+            for _ in range(depth):
+                actions = list(dict.fromkeys(self.graph.get(current, [])))
+                if not actions:
+                    break
+                current = self.rng.choice(actions)
+                path.append(current)
+
+            candidates = path if self.allow_same_title else path[1:]
+            candidates = [
+                title
+                for title in candidates
+                if self.allow_same_title or title != start
+            ]
+            if candidates:
+                return TrainingTask(
+                    start_title=start,
+                    target_title=self.rng.choice(candidates),
+                )
+
+        start = self.rng.choice(self.start_titles)
+        actions = list(dict.fromkeys(self.graph[start]))
+        return TrainingTask(start_title=start, target_title=self.rng.choice(actions))
+
+
 class TrainingAlgorithm(ABC):
     """Swappable training procedure for AutoregressiveWalk."""
 
@@ -340,6 +398,7 @@ class TrainingAlgorithm(ABC):
         graph: Mapping[Title, Sequence[Action]],
         *,
         sampler: TaskSampler | None = None,
+        log_callback: Callable[[dict[str, float | int | str | None]], None] | None = None,
     ) -> TrainingSummary:
         raise NotImplementedError
 
@@ -360,12 +419,17 @@ class BasicReinforceTrainer(TrainingAlgorithm):
         graph: Mapping[Title, Sequence[Action]],
         *,
         sampler: TaskSampler | None = None,
+        log_callback: Callable[[dict[str, float | int | str | None]], None] | None = None,
     ) -> TrainingSummary:
         config = self.config
-        task_sampler = sampler or RandomPairTaskSampler(graph)
+        task_sampler = sampler or RandomWalkTaskSampler(
+            graph,
+            max_depth=config.max_steps,
+        )
         optimizer = torch.optim.AdamW(model.network.parameters(), lr=config.learning_rate)
 
         rewards: list[float] = []
+        successes: list[int] = []
         step_counts: list[int] = []
         stopped_reasons: Counter[str] = Counter()
         last_loss: float | None = None
@@ -388,20 +452,27 @@ class BasicReinforceTrainer(TrainingAlgorithm):
                 optimizer.zero_grad(set_to_none=True)
 
             rewards.append(reward)
+            successes.append(int(rollout.reached_target))
             step_counts.append(rollout.steps_taken)
             stopped_reasons[rollout.stopped_reason] += 1
 
             if config.log_every and episode_index % config.log_every == 0:
                 recent_rewards = rewards[-config.log_every :]
-                recent_successes = stopped_reasons["target_reached"]
-                print(
-                    {
-                        "episode": episode_index,
-                        "avg_reward": sum(recent_rewards) / len(recent_rewards),
-                        "successes": recent_successes,
-                        "last_loss": last_loss,
-                    }
-                )
+                recent_successes = successes[-config.log_every :]
+                recent_steps = step_counts[-config.log_every :]
+                log_payload: dict[str, float | int | str | None] = {
+                    "episode": episode_index,
+                    "avg_reward": sum(recent_rewards) / len(recent_rewards),
+                    "successes": stopped_reasons["target_reached"],
+                    "success_rate": stopped_reasons["target_reached"] / episode_index,
+                    "recent_success_rate": sum(recent_successes) / len(recent_successes),
+                    "avg_steps": sum(recent_steps) / len(recent_steps),
+                    "last_loss": last_loss,
+                    "reward_baseline": self.reward_baseline,
+                }
+                print(log_payload)
+                if log_callback is not None:
+                    log_callback(log_payload)
 
         leftover = config.episodes % config.batch_size
         if leftover:
@@ -502,10 +573,183 @@ class BasicReinforceTrainer(TrainingAlgorithm):
         self.reward_baseline = decay * self.reward_baseline + (1.0 - decay) * reward
 
 
+class HERTrainer(BasicReinforceTrainer):
+    """REINFORCE trainer augmented with hindsight goal relabeling."""
+
+    name = "her"
+
+    def train(
+        self,
+        model: AutoregressiveWalk,
+        graph: Mapping[Title, Sequence[Action]],
+        *,
+        sampler: TaskSampler | None = None,
+        log_callback: Callable[[dict[str, float | int | str | None]], None] | None = None,
+    ) -> TrainingSummary:
+        config = self.config
+        task_sampler = sampler or RandomWalkTaskSampler(
+            graph,
+            max_depth=config.max_steps,
+        )
+        optimizer = torch.optim.AdamW(model.network.parameters(), lr=config.learning_rate)
+
+        rewards: list[float] = []
+        successes: list[int] = []
+        step_counts: list[int] = []
+        stopped_reasons: Counter[str] = Counter()
+        last_loss: float | None = None
+
+        model.network.train()
+        optimizer.zero_grad(set_to_none=True)
+
+        for episode_index in range(1, config.episodes + 1):
+            rollout = self.rollout(model, graph, task_sampler.sample())
+            reward = self.reward(rollout)
+            losses: list[Tensor] = []
+
+            original_loss = self.loss(rollout, reward)
+            if original_loss is not None:
+                losses.append(original_loss)
+
+            for hindsight_rollout in self.hindsight_rollouts(model, graph, rollout):
+                hindsight_reward = self.reward(hindsight_rollout)
+                hindsight_loss = self.loss(hindsight_rollout, hindsight_reward)
+                if hindsight_loss is not None:
+                    losses.append(hindsight_loss * config.hindsight_loss_weight)
+
+            if losses:
+                loss = torch.stack(losses).mean()
+                (loss / config.batch_size).backward()
+                last_loss = float(loss.detach().cpu().item())
+
+            if episode_index % config.batch_size == 0:
+                nn.utils.clip_grad_norm_(model.network.parameters(), config.max_grad_norm)
+                optimizer.step()
+                optimizer.zero_grad(set_to_none=True)
+
+            rewards.append(reward)
+            successes.append(int(rollout.reached_target))
+            step_counts.append(rollout.steps_taken)
+            stopped_reasons[rollout.stopped_reason] += 1
+
+            if config.log_every and episode_index % config.log_every == 0:
+                recent_rewards = rewards[-config.log_every :]
+                recent_successes = successes[-config.log_every :]
+                recent_steps = step_counts[-config.log_every :]
+                log_payload: dict[str, float | int | str | None] = {
+                    "episode": episode_index,
+                    "avg_reward": sum(recent_rewards) / len(recent_rewards),
+                    "successes": stopped_reasons["target_reached"],
+                    "success_rate": stopped_reasons["target_reached"] / episode_index,
+                    "recent_success_rate": sum(recent_successes) / len(recent_successes),
+                    "avg_steps": sum(recent_steps) / len(recent_steps),
+                    "last_loss": last_loss,
+                    "reward_baseline": self.reward_baseline,
+                }
+                print(log_payload)
+                if log_callback is not None:
+                    log_callback(log_payload)
+
+        leftover = config.episodes % config.batch_size
+        if leftover:
+            nn.utils.clip_grad_norm_(model.network.parameters(), config.max_grad_norm)
+            optimizer.step()
+            optimizer.zero_grad(set_to_none=True)
+
+        model.network.eval()
+        total = len(rewards)
+        success_count = stopped_reasons["target_reached"]
+        return TrainingSummary(
+            episodes=total,
+            average_reward=sum(rewards) / total if total else 0.0,
+            success_rate=success_count / total if total else 0.0,
+            average_steps=sum(step_counts) / total if total else 0.0,
+            stopped_reasons=dict(stopped_reasons),
+            last_loss=last_loss,
+        )
+
+    def hindsight_rollouts(
+        self,
+        model: AutoregressiveWalk,
+        graph: Mapping[Title, Sequence[Action]],
+        rollout: RolloutResult,
+    ) -> list[RolloutResult]:
+        """Replay achieved states as goals and recompute goal-conditioned log-probs."""
+        if self.config.hindsight_goals_per_episode <= 0 or not rollout.steps:
+            return []
+
+        goal_indices_by_title: dict[Title, int] = {}
+        for index, title in enumerate(rollout.visited[1:], start=1):
+            if title != rollout.task.target_title:
+                goal_indices_by_title.setdefault(title, index)
+
+        if not goal_indices_by_title:
+            return []
+
+        items = list(goal_indices_by_title.items())
+        sample_size = min(self.config.hindsight_goals_per_episode, len(items))
+        if sample_size < len(items):
+            items = random.sample(items, sample_size)
+
+        hindsight_rollouts: list[RolloutResult] = []
+        for hindsight_goal, goal_index in items:
+            relabeled = self.replay_until_goal(model, graph, rollout, hindsight_goal, goal_index)
+            if relabeled is not None:
+                hindsight_rollouts.append(relabeled)
+        return hindsight_rollouts
+
+    def replay_until_goal(
+        self,
+        model: AutoregressiveWalk,
+        graph: Mapping[Title, Sequence[Action]],
+        rollout: RolloutResult,
+        hindsight_goal: Title,
+        goal_index: int,
+    ) -> RolloutResult | None:
+        """Recompute the sampled path prefix under a substituted target title."""
+        replayed_steps: list[RolloutStep] = []
+        for step_index, original_step in enumerate(rollout.steps[:goal_index]):
+            history = rollout.visited[: step_index + 1]
+            actions = list(dict.fromkeys(graph.get(original_step.current_title, [])))
+            if not actions:
+                return None
+            try:
+                action_index = actions.index(original_step.action)
+            except ValueError:
+                return None
+
+            logits = model.action_logits(history, hindsight_goal, actions)
+            if self.config.temperature != 1.0:
+                logits = logits / self.config.temperature
+            distribution = torch.distributions.Categorical(logits=logits)
+            action_tensor = torch.tensor(action_index, device=logits.device)
+            replayed_steps.append(
+                RolloutStep(
+                    current_title=original_step.current_title,
+                    action=original_step.action,
+                    log_prob=distribution.log_prob(action_tensor),
+                    entropy=distribution.entropy(),
+                )
+            )
+
+        return RolloutResult(
+            task=TrainingTask(
+                start_title=rollout.task.start_title,
+                target_title=hindsight_goal,
+            ),
+            visited=rollout.visited[: goal_index + 1],
+            stopped_reason="target_reached",
+            steps=replayed_steps,
+        )
+
+
 TRAINING_ALGORITHMS: dict[str, type[TrainingAlgorithm]] = {
     BasicReinforceTrainer.name: BasicReinforceTrainer,
     "reinforce": BasicReinforceTrainer,
     "basic": BasicReinforceTrainer,
+    HERTrainer.name: HERTrainer,
+    "her_reinforce": HERTrainer,
+    "hindsight": HERTrainer,
 }
 
 
@@ -522,8 +766,8 @@ def create_training_algorithm(
             f"Unknown training algorithm: {name}. Available: {available}"
         )
     algorithm_class = TRAINING_ALGORITHMS[normalized]
-    if algorithm_class is BasicReinforceTrainer:
-        return BasicReinforceTrainer(config)
+    if issubclass(algorithm_class, BasicReinforceTrainer):
+        return algorithm_class(config)
     return algorithm_class()
 
 
@@ -606,6 +850,7 @@ class AutoregressiveWalk(Model):
         algorithm: str | TrainingAlgorithm = "basic_reinforce",
         config: ReinforceConfig | None = None,
         sampler: TaskSampler | None = None,
+        log_callback: Callable[[dict[str, float | int | str | None]], None] | None = None,
     ) -> TrainingSummary:
         """Train the policy with a pluggable no-gold training algorithm."""
         trainer = (
@@ -613,15 +858,14 @@ class AutoregressiveWalk(Model):
             if isinstance(algorithm, str)
             else algorithm
         )
-        return trainer.train(self, graph, sampler=sampler)
+        return trainer.train(self, graph, sampler=sampler, log_callback=log_callback)
 
     @torch.inference_mode()
     def sample(self, page: Page, target: str, history: list[str]) -> Action | None:
-        """Sample one action directly from the model's logit distribution."""
+        """Choose the highest-scoring action for deterministic inference."""
         if not page.actions:
             return None
 
         logits = self.action_logits(history, target, list(page.actions))
-        # Sample from the categorical distribution induced by the action logits.
-        best_index = int(torch.distributions.Categorical(logits=logits).sample().item())
+        best_index = int(torch.argmax(logits).item())
         return page.actions[best_index]

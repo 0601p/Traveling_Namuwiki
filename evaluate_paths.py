@@ -60,9 +60,39 @@ def mean(values: list[float]) -> float | None:
     return sum(values) / len(values)
 
 
+def normalize_model_name(name: str) -> str:
+    return name.strip().lower().replace("_", "").replace("-", "")
+
+
+def resolve_device(device: str) -> str:
+    """Resolve the requested inference device."""
+    if device != "auto":
+        return device
+
+    import torch
+
+    if torch.cuda.is_available():
+        return "cuda"
+    if (
+        getattr(torch.backends, "mps", None) is not None
+        and torch.backends.mps.is_available()
+    ):
+        return "mps"
+    return "cpu"
+
+
 def evaluate(args: argparse.Namespace) -> dict:
     env = NamuwikiEnvironment.from_dataset(args.actions_path)
-    model = create_model(args.model)
+    model_kwargs = {}
+    device = None
+    if normalize_model_name(args.model) == "arwalk":
+        device = resolve_device(args.device)
+        model_kwargs["device"] = device
+    model = create_model(args.model, **model_kwargs)
+    if args.checkpoint is not None:
+        if not hasattr(model, "load_checkpoint"):
+            raise ValueError(f"Model {args.model!r} does not support checkpoints.")
+        model.load_checkpoint(args.checkpoint)
     failure_distance = (
         args.failure_distance
         if args.failure_distance is not None
@@ -140,6 +170,8 @@ def evaluate(args: argparse.Namespace) -> dict:
     return {
         "split": args.split,
         "model": args.model,
+        "device": device,
+        "checkpoint": str(args.checkpoint) if args.checkpoint is not None else None,
         "total": total,
         "predictions_output": str(args.predictions_output),
         "score_by_min_distance": score_by_min_distance,
@@ -177,6 +209,16 @@ def parse_args() -> argparse.Namespace:
         "--failure-distance",
         type=float,
         help="Distance assigned when the model fails to reach the target.",
+    )
+    parser.add_argument(
+        "--device",
+        default="auto",
+        help="Inference device for arwalk: auto, cpu, cuda, cuda:0, mps, etc.",
+    )
+    parser.add_argument(
+        "--checkpoint",
+        type=Path,
+        help="Checkpoint path for models that support saved weights, e.g. arwalk.",
     )
     parser.add_argument("--limit", type=int)
     parser.add_argument(
