@@ -5,10 +5,9 @@ from pathlib import Path
 from typing import Mapping, Sequence
 
 from embed import EmbeddingModel, as_float_list
-from utils import Action, Page
+from utils import Action, Config, Page
 
 from .base import Model
-from .config import DEFAULT_LINEAR_CONFIG, config_value, load_model_config
 
 
 def dot(left: Sequence[float], right: Sequence[float]) -> float:
@@ -88,12 +87,13 @@ class LinearModel(Model):
     def __init__(
         self,
         *,
+        model_config: str | Path | None = None,
         embedding_config: str | Path | None = None,
-        model_config: str | Path | None = DEFAULT_LINEAR_CONFIG,
     ) -> None:
-        config = load_model_config(model_config)
-        weights_path = config_value(config, "weights_path")
-        self.embedder = EmbeddingModel(config_path=embedding_config)
+        config = Config(model_config)
+        embed_config = Config(embedding_config)
+        weights_path = config.value("weights_path")
+        self.embedder = EmbeddingModel(config=embed_config.data)
         self.embedding_dim = self.embedder.get_embed_dim()
         (
             self.link_weights,

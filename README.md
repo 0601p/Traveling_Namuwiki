@@ -98,15 +98,15 @@ To add a model, implement a `Model` subclass and register it in
 - the target document embedding
 - their elementwise interaction
 
-Model and embedding options are configured with YAML files:
+Model and embedding options are configured with separate YAML files:
 
 - `config/embed/from-cache.yaml`: read a precomputed embedding cache
 - `config/embed/on-the-fly.yaml`: run an embedding model directly
 - `config/model/linear.yaml`: optional linear weight path
 
 The linear model usually uses `config/embed/from-cache.yaml`. Set
-`embeddings_path` in that config to a local embedding cache file. The cache can
-be either:
+`embeddings_path` in that embedding config to a local embedding cache file. The
+cache can be either:
 
 - a JSON object: `{"title": [0.1, 0.2, ...]}`
 - a JSON list: `[{"title": "A", "embedding": [...]}, ...]`
@@ -181,6 +181,18 @@ The generated cache is JSONL:
 ```jsonl
 {"title": "A", "embedding": [0.1, 0.2, ...]}
 {"title": "B", "embedding": [0.3, 0.4, ...]}
+```
+
+## Training AR Walk
+
+`train_ar_walk.py` trains the autoregressive walking policy. Model architecture
+settings live in `config/model/ar_walk.yaml`; title embedding settings live in
+the shared embedding config, for example `config/embed/on-the-fly.yaml`.
+
+```bash
+python train_ar_walk.py \
+  --model-config config/model/ar_walk.yaml \
+  --embedding-config config/embed/on-the-fly.yaml
 ```
 
 ## Training Linear Weights

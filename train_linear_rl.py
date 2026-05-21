@@ -13,15 +13,13 @@ import torch
 from datasets import load_dataset
 
 from embed import (
-    DEFAULT_FROM_CACHE_CONFIG,
     load_embedding_config,
     load_embeddings,
     require_config_value,
 )
 from environment import NamuwikiEnvironment
-from models.config import DEFAULT_LINEAR_CONFIG, config_value, load_model_config
 from models.linear import load_weights
-from utils import ACTIONS_DATASET, PATHS_DATASET, Title
+from utils import ACTIONS_DATASET, PATHS_DATASET, Config, Title
 
 
 @dataclass(frozen=True)
@@ -157,8 +155,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--paths-path", default=PATHS_DATASET)
     parser.add_argument("--train-split", default="train")
     parser.add_argument("--eval-split", default="validation")
-    parser.add_argument("--embedding-config", default=DEFAULT_FROM_CACHE_CONFIG)
-    parser.add_argument("--model-config", default=DEFAULT_LINEAR_CONFIG)
+    parser.add_argument("--embedding-config", type=Path, required=True)
+    parser.add_argument("--model-config", type=Path, required=True)
     parser.add_argument("--max-steps", type=int, default=10)
     parser.add_argument("--epochs", type=int, default=5)
     parser.add_argument("--batch-size", type=int, default=32)
@@ -439,8 +437,8 @@ def main() -> None:
     log("[train_linear_rl] loading embeddings")
     embeddings = load_training_embeddings(args.embedding_config)
     log(f"[train_linear_rl] loaded {len(embeddings)} embeddings")
-    model_config = load_model_config(args.model_config)
-    weights_path = config_value(model_config, "weights_path")
+    model_config = Config(args.model_config)
+    weights_path = model_config.value("weights_path")
     policy = LinearPolicy(
         embeddings,
         weights_path=weights_path if isinstance(weights_path, (str, Path)) else None,

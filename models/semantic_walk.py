@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from embed import DEFAULT_ON_THE_FLY_CONFIG, EmbeddingModel
-from utils import Action, Page
+from embed import EmbeddingModel
+from utils import Action, Config, Page
 
 from .base import Model
 
@@ -21,10 +21,13 @@ class SemanticWalk(Model):
     def __init__(
         self,
         *,
-        embedding_config: str | Path | None = DEFAULT_ON_THE_FLY_CONFIG,
+        model_config: str | Path | None = None,
+        embedding_config: str | Path | None = None,
     ) -> None:
+        Config(model_config)
+        embed_config = Config(embedding_config)
         self.embedder = EmbeddingModel(
-            config_path=embedding_config,
+            config=embed_config.data,
         )
 
     def _score(self, action_embedding: list[float], target_embedding: list[float]) -> float:

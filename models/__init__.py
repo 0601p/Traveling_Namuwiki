@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import argparse
-import inspect
+import warnings
+from pathlib import Path
 
-from embed import DEFAULT_ON_THE_FLY_CONFIG
-from .config import DEFAULT_LINEAR_CONFIG
 from utils import Action, Page, Title
 
 from .base import Model
@@ -18,6 +17,19 @@ MODEL_REGISTRY: dict[str, type[Model]] = {
     "linear": LinearModel,
     "semanticwalk": SemanticWalk,
 }
+_OPTIONAL_EXPORTS: list[str] = []
+
+try:
+    from .ar_walk import AutoregressiveWalk
+except ImportError as exc:
+    warnings.warn(
+        "Skipping ar_walk registration because optional dependencies are missing: "
+        f"{exc}",
+        stacklevel=1,
+    )
+else:
+    MODEL_REGISTRY["ar_walk"] = AutoregressiveWalk
+    _OPTIONAL_EXPORTS.append("AutoregressiveWalk")
 
 
 def normalize_model_name(name: str) -> str:
@@ -31,51 +43,35 @@ def normalized_registry() -> dict[str, type[Model]]:
     }
 
 
-def add_linear_args(parser: argparse.ArgumentParser) -> None:
+def add_model_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--model-config",
-        default=str(DEFAULT_LINEAR_CONFIG),
-        help="YAML model config path, e.g. linear weights_path.",
+        type=Path,
+        required=True,
+        help="YAML model config path for the selected model.",
     )
-
-
-def add_embedding_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--embedding-config",
-        default=str(DEFAULT_ON_THE_FLY_CONFIG),
-        help="YAML embedding config path for models with on-the-fly embeddings.",
+        type=Path,
+        help="YAML embedding config path for models that use embeddings.",
     )
 
 
-def add_model_args(parser: argparse.ArgumentParser) -> None:
-    add_linear_args(parser)
-    add_embedding_args(parser)
-
-
-def accepted_kwargs(
-    model_class: type[Model],
-    kwargs: dict[str, object],
-) -> dict[str, object]:
-    signature = inspect.signature(model_class)
-    if any(
-        parameter.kind == inspect.Parameter.VAR_KEYWORD
-        for parameter in signature.parameters.values()
-    ):
-        return kwargs
-    return {
-        key: value
-        for key, value in kwargs.items()
-        if key in signature.parameters
-    }
-
-
-def create_model(name: str, **kwargs: object) -> Model:
+def create_model(
+    name: str,
+    *,
+    model_config: str | Path | None = None,
+    embedding_config: str | Path | None = None,
+) -> Model:
     registry = normalized_registry()
     normalized = normalize_model_name(name)
     if normalized not in registry:
         raise NotImplementedError(f"Unknown model: {name}")
     model_class = registry[normalized]
-    return model_class(**accepted_kwargs(model_class, kwargs))
+    return model_class(
+        model_config=model_config,
+        embedding_config=embedding_config,
+    )
 
 
 def available_models() -> list[str]:
@@ -93,4 +89,5 @@ __all__ = [
     "add_model_args",
     "available_models",
     "create_model",
+    *_OPTIONAL_EXPORTS,
 ]

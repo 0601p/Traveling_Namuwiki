@@ -95,9 +95,11 @@ class NamuwikiEnvironment:
         max_steps: int,
         stop_on_cycle: bool = True,
     ) -> SearchResult:
+        """Simulate one navigation episode by repeatedly sampling the next page."""
         visited = [start_title]
         seen = {start_title}
         current = start_title
+        model.begin_episode(start_title, target_title)
 
         for _ in range(max_steps):
             page = Page(
