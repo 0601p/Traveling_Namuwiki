@@ -7,11 +7,13 @@ from utils import Action, Page, Title
 from .base import Model
 from .linear import LinearModel
 from .randomwalk import RandomWalk
+from .semantic_walk import SemanticWalk
 
 
 MODEL_REGISTRY: dict[str, type[Model]] = {
     "randomwalk": RandomWalk,
     "linear": LinearModel,
+    "semanticwalk": SemanticWalk,
 }
 
 
@@ -52,6 +54,7 @@ __all__ = [
     "Model",
     "Page",
     "RandomWalk",
+    "SemanticWalk",
     "Title",
     "add_model_args",
     "available_models",
