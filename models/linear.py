@@ -2,16 +2,13 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Mapping, Sequence
+from typing import Mapping
 
 from embed import EmbeddingModel, as_float_list
+from similarity import dot
 from utils import Action, Config, Page
 
 from .base import Model
-
-
-def dot(left: Sequence[float], right: Sequence[float]) -> float:
-    return sum(l * r for l, r in zip(left, right))
 
 
 def load_weights(

@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Iterable
 
 from datasets import load_dataset
-
 from environment import NamuwikiEnvironment
 from models import add_model_args, available_models, create_model
 from utils import ACTIONS_DATASET, PATHS_DATASET, Title
@@ -42,8 +41,7 @@ def parse_hop(value: object) -> int:
 
 
 def iter_path_examples(dataset_path: str, split: str) -> Iterable[PathExample]:
-    dataset = load_dataset(dataset_path, split=split)
-    for row in dataset:
+    for row in load_dataset(dataset_path, split=split):
         yield row_to_example(row)
 
 
@@ -67,10 +65,6 @@ def evaluate(args: argparse.Namespace) -> dict:
         model_config=args.model_config,
         embedding_config=args.embedding_config,
     )
-    if args.checkpoint is not None:
-        if not hasattr(model, "load_checkpoint"):
-            raise ValueError(f"Model {args.model!r} does not support checkpoints.")
-        model.load_checkpoint(args.checkpoint)
     failure_distance = (
         args.failure_distance
         if args.failure_distance is not None
@@ -149,7 +143,6 @@ def evaluate(args: argparse.Namespace) -> dict:
         "split": args.split,
         "model": args.model,
         "device": str(getattr(model, "device", "")) or None,
-        "checkpoint": str(args.checkpoint) if args.checkpoint is not None else None,
         "total": total,
         "predictions_output": str(args.predictions_output),
         "score_by_min_distance": score_by_min_distance,
@@ -188,11 +181,6 @@ def parse_args() -> argparse.Namespace:
         "--failure-distance",
         type=float,
         help="Distance assigned when the model fails to reach the target.",
-    )
-    parser.add_argument(
-        "--checkpoint",
-        type=Path,
-        help="Checkpoint path for models that support saved weights, e.g. arwalk.",
     )
     parser.add_argument("--limit", type=int)
     parser.add_argument(

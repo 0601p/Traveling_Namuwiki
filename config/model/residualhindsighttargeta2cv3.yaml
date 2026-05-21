@@ -1,0 +1,3 @@
+checkpoint_path: checkpoints/residual_hindsight_target_a2c_v3.pt
+device: auto
+prior_alpha: 5.0

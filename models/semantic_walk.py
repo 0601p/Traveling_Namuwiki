@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from embed import EmbeddingModel
+from similarity import get_vector_metric
 from utils import Action, Config, Page
 
 from .base import Model
@@ -24,28 +25,35 @@ class SemanticWalk(Model):
         model_config: str | Path | None = None,
         embedding_config: str | Path | None = None,
     ) -> None:
-        Config(model_config)
+        config = Config(model_config)
+        self.avoid_visited = bool(config.value("avoid_visited"))
+        self.metric = get_vector_metric(str(config.value("metric")))
         embed_config = Config(embedding_config)
         self.embedder = EmbeddingModel(
             config=embed_config.data,
         )
+        self._history: set[str] = set()
 
-    def _score(self, action_embedding: list[float], target_embedding: list[float]) -> float:
-        return sum(
-            action_value * target_value
-            for action_value, target_value in zip(action_embedding, target_embedding)
-        )
+    def begin_episode(self, start_title: str, target: str) -> None:
+        del target
+        self._history = {start_title}
 
     def sample(self, page: Page, target: str) -> Action | None:
         actions = list(page.actions)
         if not actions:
             return None
 
+        if self.avoid_visited:
+            unvisited = [action for action in actions if action not in self._history]
+            candidates = unvisited or actions
+        else:
+            candidates = actions
+
         target_vector = self.embedder.get_embed(target, prefix=self.QUERY_PREFIX)
-        action_vectors = self.embedder.get_embeds(actions, prefix=self.PASSAGE_PREFIX)
-        scores = [
-            self._score(action_vector, target_vector)
-            for action_vector in action_vectors
-        ]
+        candidate_vectors = self.embedder.get_embeds(candidates, prefix=self.PASSAGE_PREFIX)
+        scores = [self.metric(candidate_vector, target_vector) for candidate_vector in candidate_vectors]
         best_index = max(range(len(scores)), key=scores.__getitem__)
-        return actions[best_index]
+        chosen = candidates[best_index]
+        if self.avoid_visited:
+            self._history.add(chosen)
+        return chosen

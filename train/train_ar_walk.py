@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 import argparse
 import json
 import random
@@ -180,11 +184,6 @@ def parse_args() -> argparse.Namespace:
         help="Allow sampled tasks where start and target are identical.",
     )
     parser.add_argument(
-        "--resume-checkpoint",
-        type=Path,
-        help="Existing checkpoint to load before training.",
-    )
-    parser.add_argument(
         "--checkpoint-output",
         type=Path,
         default=None,
@@ -265,9 +264,6 @@ def main() -> None:
         embedding_config=args.embedding_config,
     )
     device = str(model.device)
-    if args.resume_checkpoint is not None:
-        model.load_checkpoint(args.resume_checkpoint)
-
     if args.task_sampler == "random":
         sampler = RandomPairTaskSampler(
             train_graph,

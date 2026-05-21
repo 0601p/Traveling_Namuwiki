@@ -710,6 +710,7 @@ class AutoregressiveWalk(Model):
         ff_dim_value = config.value("ff_dim")
         ff_dim = int(ff_dim_value) if ff_dim_value is not None else None
         device = self._resolve_device(config.value("device"))
+        checkpoint_path = config.value("checkpoint_path")
 
         self.device = torch.device(device)
         self.embedder = EmbeddingModel(config=embed_config.data)
@@ -722,6 +723,8 @@ class AutoregressiveWalk(Model):
         ).to(self.device)
         self.network.eval()
         self._history: list[str] = []
+        if checkpoint_path is not None:
+            self.load_checkpoint(str(checkpoint_path))
 
     def _resolve_device(self, device: object) -> str:
         """Resolve the configured inference device."""

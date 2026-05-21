@@ -3,3 +3,4 @@ num_heads: 4
 dropout: 0.1
 ff_dim: null
 device: auto
+checkpoint_path: null

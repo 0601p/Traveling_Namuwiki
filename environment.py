@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import hashlib
+import pickle
+import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Mapping, Sequence
 
 from datasets import load_dataset
-
-from models import Model
+from models.base import Model
 from utils import ACTIONS_DATASET, RAW_DATASET, Action, Page, Title
 
 
@@ -54,6 +57,16 @@ class NamuwikiEnvironment:
         raw_dataset_path: str = RAW_DATASET,
         load_raw: bool = False,
     ) -> NamuwikiEnvironment:
+        cache_path = cls._cache_path(
+            dataset_path=dataset_path,
+            split=split,
+            load_raw=load_raw,
+        )
+        if cache_path.exists():
+            with cache_path.open("rb") as handle:
+                payload = pickle.load(handle)
+            return cls(payload["graph"], payload.get("raws"))
+
         graph: Graph = {}
         for row in load_dataset(dataset_path, split=split):
             title = str(row.get("title") or "").strip()
@@ -68,7 +81,24 @@ class NamuwikiEnvironment:
                 if title in graph and title not in raws:
                     raws[title] = row["text"]
 
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        with cache_path.open("wb") as handle:
+            pickle.dump({"graph": graph, "raws": raws}, handle)
+
         return cls(graph, raws)
+
+    @staticmethod
+    def _cache_path(
+        *,
+        dataset_path: str,
+        split: str,
+        load_raw: bool,
+    ) -> Path:
+        slug = re.sub(r"[^0-9A-Za-z._-]+", "_", dataset_path).strip("._")
+        digest = hashlib.sha1(dataset_path.encode("utf-8")).hexdigest()[:10]
+        raw_suffix = "_raw" if load_raw else ""
+        filename = f"{slug or 'dataset'}_{digest}_{split}{raw_suffix}.pkl"
+        return Path(".cache") / filename
 
     def actions(self, title: Title) -> Sequence[Action]:
         return self.graph.get(title, [])

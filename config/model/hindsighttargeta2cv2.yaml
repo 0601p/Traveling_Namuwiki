@@ -1,0 +1,2 @@
+checkpoint_path: checkpoints/hindsight_target_a2c_v2.pt
+device: auto

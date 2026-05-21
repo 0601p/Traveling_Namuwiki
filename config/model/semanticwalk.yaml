@@ -1,1 +1,2 @@
-# SemanticWalk has no options yet.
+avoid_visited: true
+metric: cosine

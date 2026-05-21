@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 import argparse
 import json
 import math
 import random
 from dataclasses import dataclass
-from pathlib import Path
-import sys
 from typing import Iterable
 
 import torch

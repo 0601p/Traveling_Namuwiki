@@ -190,7 +190,7 @@ settings live in `config/model/ar_walk.yaml`; title embedding settings live in
 the shared embedding config, for example `config/embed/on-the-fly.yaml`.
 
 ```bash
-python train_ar_walk.py \
+python train/train_ar_walk.py \
   --model-config config/model/ar_walk.yaml \
   --embedding-config config/embed/on-the-fly.yaml
 ```
@@ -200,7 +200,7 @@ python train_ar_walk.py \
 `train_linear_rl.py` uses the same config files:
 
 ```bash
-python train_linear_rl.py \
+python train/train_linear_rl.py \
   --embedding-config config/embed/from-cache.yaml \
   --model-config config/model/linear.yaml
 ```
