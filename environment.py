@@ -73,6 +73,16 @@ class NamuwikiEnvironment:
     def actions(self, title: Title) -> Sequence[Action]:
         return self.graph.get(title, [])
 
+    def all_titles(self) -> list[Title]:
+        titles: dict[Title, None] = {}
+        for title, actions in self.graph.items():
+            if title.strip():
+                titles[title] = None
+            for action in actions:
+                if action.strip():
+                    titles[action] = None
+        return list(titles)
+
     def raw(self, title: Title) -> str:
         return self.raws.get(title, "")
 

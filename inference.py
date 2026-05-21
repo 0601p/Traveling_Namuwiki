@@ -37,8 +37,8 @@ def main() -> None:
     env = NamuwikiEnvironment.from_dataset(args.actions_path)
     model = create_model(
         args.model,
-        embeddings_path=args.embeddings_path,
-        weights_path=args.weights_path,
+        model_config=args.model_config,
+        embedding_config=args.embedding_config,
     )
     result = env.walk(
         start_title=args.start_title,

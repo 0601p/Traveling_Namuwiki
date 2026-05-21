@@ -64,8 +64,8 @@ def evaluate(args: argparse.Namespace) -> dict:
     env = NamuwikiEnvironment.from_dataset(args.actions_path)
     model = create_model(
         args.model,
-        embeddings_path=args.embeddings_path,
-        weights_path=args.weights_path,
+        model_config=args.model_config,
+        embedding_config=args.embedding_config,
     )
     failure_distance = (
         args.failure_distance

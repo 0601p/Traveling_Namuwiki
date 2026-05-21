@@ -12,8 +12,15 @@ from typing import Iterable
 import torch
 from datasets import load_dataset
 
+from embed import (
+    DEFAULT_FROM_CACHE_CONFIG,
+    load_embedding_config,
+    load_embeddings,
+    require_config_value,
+)
 from environment import NamuwikiEnvironment
-from models.linear import load_embeddings, load_weights
+from models.config import DEFAULT_LINEAR_CONFIG, config_value, load_model_config
+from models.linear import load_weights
 from utils import ACTIONS_DATASET, PATHS_DATASET, Title
 
 
@@ -150,8 +157,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--paths-path", default=PATHS_DATASET)
     parser.add_argument("--train-split", default="train")
     parser.add_argument("--eval-split", default="validation")
-    parser.add_argument("--embeddings-path", required=True)
-    parser.add_argument("--init-weights-path")
+    parser.add_argument("--embedding-config", default=DEFAULT_FROM_CACHE_CONFIG)
+    parser.add_argument("--model-config", default=DEFAULT_LINEAR_CONFIG)
     parser.add_argument("--max-steps", type=int, default=10)
     parser.add_argument("--epochs", type=int, default=5)
     parser.add_argument("--batch-size", type=int, default=32)
@@ -221,6 +228,22 @@ def resolve_device(raw_device: str) -> str:
     if raw_device != "auto":
         return raw_device
     return "cuda" if torch.cuda.is_available() else "cpu"
+
+
+def load_training_embeddings(config_path: str | Path) -> dict[str, list[float]]:
+    config = load_embedding_config(config_path)
+    use_cache = bool(require_config_value(config, "use_cache", config.get("use_cache")))
+    if not use_cache:
+        raise ValueError("train_linear_rl requires a cached embedding config")
+
+    embeddings_path = require_config_value(
+        config,
+        "embeddings_path",
+        config.get("embeddings_path"),
+    )
+    if not isinstance(embeddings_path, (str, Path)):
+        raise ValueError("embeddings_path must be a string path")
+    return load_embeddings(embeddings_path)
 
 
 def discounted_returns(length: int, final_reward: float, discount: float) -> list[float]:
@@ -414,11 +437,13 @@ def main() -> None:
     log("[train_linear_rl] loading environment")
     env = NamuwikiEnvironment.from_dataset(args.actions_path)
     log("[train_linear_rl] loading embeddings")
-    embeddings = load_embeddings(args.embeddings_path)
+    embeddings = load_training_embeddings(args.embedding_config)
     log(f"[train_linear_rl] loaded {len(embeddings)} embeddings")
+    model_config = load_model_config(args.model_config)
+    weights_path = config_value(model_config, "weights_path")
     policy = LinearPolicy(
         embeddings,
-        weights_path=args.init_weights_path,
+        weights_path=weights_path if isinstance(weights_path, (str, Path)) else None,
         device=device,
     )
     optimizer = torch.optim.Adam(

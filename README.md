@@ -20,7 +20,8 @@ pip install datasets
 ```
 
 If you want to use the linear embedding model, no extra package is required, but
-you do need a local embedding file.
+you do need a local embedding cache file. On-the-fly embedding generation uses
+`sentence-transformers`.
 
 ## Inference
 
@@ -97,20 +98,28 @@ To add a model, implement a `Model` subclass and register it in
 - the target document embedding
 - their elementwise interaction
 
-The model expects a local embedding file passed via `--embeddings-path`. The
-file can be either:
+Model and embedding options are configured with YAML files:
+
+- `config/embed/from-cache.yaml`: read a precomputed embedding cache
+- `config/embed/on-the-fly.yaml`: run an embedding model directly
+- `config/model/linear.yaml`: optional linear weight path
+
+The linear model usually uses `config/embed/from-cache.yaml`. Set
+`embeddings_path` in that config to a local embedding cache file. The cache can
+be either:
 
 - a JSON object: `{"title": [0.1, 0.2, ...]}`
 - a JSON list: `[{"title": "A", "embedding": [...]}, ...]`
 - a JSONL file with one object per line and fields `title` and `embedding`
 
-Optional linear weights can be passed via `--weights-path`. Supported formats:
+Optional linear weights are configured with `weights_path` in
+`config/model/linear.yaml`. Supported formats:
 
 - `{"weights": [...] , "bias": 0.0}` where `weights` has size `2 * dim` or `3 * dim`
 - `{"link_weights": [...], "target_weights": [...], "interaction_weights": [...], "bias": 0.0}`
 
-If `--weights-path` is omitted, the model defaults to a similarity-style scorer
-with zero link and target weights, all-ones interaction weights, and zero bias.
+If `weights_path` is `null`, the model defaults to a similarity-style scorer with
+zero link and target weights, all-ones interaction weights, and zero bias.
 
 Example inference:
 
@@ -119,7 +128,8 @@ python inference.py \
   --start-title "Dead 6" \
   --target "Command & Conquer" \
   --model linear \
-  --embeddings-path data/title_embeddings.json
+  --embedding-config config/embed/from-cache.yaml \
+  --model-config config/model/linear.yaml
 ```
 
 Example evaluation:
@@ -128,24 +138,61 @@ Example evaluation:
 python evaluate_paths.py \
   --split validation \
   --model linear \
-  --embeddings-path data/title_embeddings.json \
-  --weights-path data/linear_weights.json
+  --embedding-config config/embed/from-cache.yaml \
+  --model-config config/model/linear.yaml
 ```
 
 ## Embedding Generation
 
-You can generate title-keyed embeddings from the actions graph and raw Namuwiki
-documents with:
+Embedding generation is also config-driven. Fill
+`config/embed/on-the-fly.yaml` with the actions dataset, output path, embedding
+model, and text source:
 
-```
-python generate_embeddings.py \
-  --output-path outputs/title_embeddings.json \
-  --text-source raw_or_title
+```yaml
+use_cache: false
+actions_path: 0601p/Traveling_Namuwiki_Actions
+raw_path: heegyu/namuwiki
+split: train
+output_path: outputs/title_embeddings.jsonl
+model_name: intfloat/multilingual-e5-small
+device: null
+batch_size: 64
+normalize_embeddings: true
+text_source: raw_or_title
+prefix: passage
+cache_inferred: false
 ```
 
-The script collects every graph title and outgoing action title, then embeds one
-text per title:
+Then run:
+
+```bash
+python generate_embeddings.py --embedding-config config/embed/on-the-fly.yaml
+```
+
+The script loads `NamuwikiEnvironment`, collects every graph title and outgoing
+action title, then embeds one text per title:
 
 - `title`: embed the title string itself
 - `raw`: require raw document text for every title
 - `raw_or_title`: use raw document text when available, otherwise fall back to the title
+
+The generated cache is JSONL:
+
+```jsonl
+{"title": "A", "embedding": [0.1, 0.2, ...]}
+{"title": "B", "embedding": [0.3, 0.4, ...]}
+```
+
+## Training Linear Weights
+
+`train_linear_rl.py` uses the same config files:
+
+```bash
+python train_linear_rl.py \
+  --embedding-config config/embed/from-cache.yaml \
+  --model-config config/model/linear.yaml
+```
+
+`embedding-config` must point to a cached embedding config. `model-config`
+provides the optional initial `weights_path`; trained weights are written under
+`outputs/rl` by default.
