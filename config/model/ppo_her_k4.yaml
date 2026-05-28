@@ -1,0 +1,2 @@
+checkpoint_path: checkpoints/ppo_her_k4.pt
+device: auto

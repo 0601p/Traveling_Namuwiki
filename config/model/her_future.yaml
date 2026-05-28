@@ -1,0 +1,2 @@
+checkpoint_path: checkpoints/her_future.pt
+device: auto

@@ -1,0 +1,2 @@
+checkpoint_path: checkpoints/bc.pt
+device: auto

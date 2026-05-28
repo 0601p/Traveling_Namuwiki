@@ -11,15 +11,23 @@ from .base import Model
 
 MODEL_REGISTRY: dict[str, tuple[str, str]] = {
     "ar_walk": (".ar_walk", "AutoregressiveWalk"),
+    "bc": (".hindsight_target_a2c_v2", "HindsightTargetA2CV2"),
+    "her_future": (".hindsight_target_a2c_v2", "HindsightTargetA2CV2"),
+    "her_mixed": (".hindsight_target_a2c_v2", "HindsightTargetA2CV2"),
+    "her_semantic": (".hindsight_target_a2c_v2", "HindsightTargetA2CV2"),
     "hindsighttargeta2cv2": (".hindsight_target_a2c_v2", "HindsightTargetA2CV2"),
     "lexicalsimilaritygreedy": (".greedy_baselines", "LexicalSimilarityGreedy"),
     "linear": (".linear", "LinearModel"),
     "neuraltargeta2c": (".neural_target_a2c", "NeuralTargetA2C"),
+    "ppo": (".hindsight_target_a2c_v2", "HindsightTargetA2CV2"),
+    "ppo_her": (".hindsight_target_a2c_v2", "HindsightTargetA2CV2"),
+    "ppo_prior": (".residual_hindsight_target_a2c_v3", "ResidualHindsightTargetA2CV3"),
     "randomwalk": (".randomwalk", "RandomWalk"),
     "residualhindsighttargeta2cv3": (
         ".residual_hindsight_target_a2c_v3",
         "ResidualHindsightTargetA2CV3",
     ),
+    "residual_ppo": (".residual_hindsight_target_a2c_v3", "ResidualHindsightTargetA2CV3"),
     "semanticwalk": (".semantic_walk", "SemanticWalk"),
 }
 

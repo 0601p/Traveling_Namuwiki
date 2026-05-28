@@ -1,0 +1,2 @@
+checkpoint_path: checkpoints/ppo.pt
+device: auto

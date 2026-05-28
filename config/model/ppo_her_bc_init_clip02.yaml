@@ -1,0 +1,2 @@
+checkpoint_path: checkpoints/ppo_her_bc_init_clip02.pt
+device: auto

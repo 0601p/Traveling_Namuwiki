@@ -1,0 +1,2 @@
+checkpoint_path: checkpoints/ppo_her_bc_init_lr5e5.pt
+device: auto

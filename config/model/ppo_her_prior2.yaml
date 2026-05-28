@@ -1,0 +1,3 @@
+checkpoint_path: checkpoints/ppo_her_prior_alpha2.0.pt
+device: auto
+prior_alpha: 2.0
