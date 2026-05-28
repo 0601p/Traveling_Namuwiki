@@ -1,0 +1,2 @@
+checkpoint_path: checkpoints/her_none.pt
+device: auto

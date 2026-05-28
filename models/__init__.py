@@ -11,6 +11,12 @@ from .base import Model
 
 MODEL_REGISTRY: dict[str, tuple[str, str]] = {
     "ar_walk": (".ar_walk", "AutoregressiveWalk"),
+    "beamlinear": (".beam_linear", "BeamLinear"),
+    "beamlexicalsimilaritygreedy": (
+        ".beam_lexical_similarity_greedy",
+        "BeamLexicalSimilarityGreedy",
+    ),
+    "beamsemanticwalk": (".beam_semantic_walk", "BeamSemanticWalk"),
     "hindsighttargeta2cv2": (".hindsight_target_a2c_v2", "HindsightTargetA2CV2"),
     "lexicalsimilaritygreedy": (".greedy_baselines", "LexicalSimilarityGreedy"),
     "linear": (".linear", "LinearModel"),

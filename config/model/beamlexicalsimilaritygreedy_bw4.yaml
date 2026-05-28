@@ -1,0 +1,7 @@
+actions_path: 0601p/Traveling_Namuwiki_Actions
+actions_split: train
+beam_width: 4
+search_depth: 3
+length_penalty: 0.5
+target_bonus: 5.0
+avoid_visited: true

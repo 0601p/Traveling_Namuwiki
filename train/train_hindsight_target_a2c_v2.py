@@ -17,6 +17,7 @@ import torch.nn.functional as F
 from environment import NamuwikiEnvironment
 from evaluate_paths import PathExample, iter_path_examples, limited
 from models.networks.neural_target_actor_critic import NeuralTargetActorCritic, save_checkpoint
+from train.reward_shaping import REWARD_SHAPING_MODES, RewardShaper, build_reward_shaper
 from utils import ACTIONS_DATASET, PATHS_DATASET
 
 
@@ -42,6 +43,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--embedding-dim", type=int, default=64)
     parser.add_argument("--hidden-dim", type=int, default=128)
     parser.add_argument("--bucket-size", type=int, default=50000)
+    parser.add_argument(
+        "--reward-shaping",
+        choices=REWARD_SHAPING_MODES,
+        default="none",
+    )
+    parser.add_argument("--reward-shaping-coef", type=float, default=0.0)
+    parser.add_argument(
+        "--embedding-config",
+        type=Path,
+        help="Optional embedding config used for cosine or hybrid reward shaping.",
+    )
+    parser.add_argument(
+        "--distance-cache-size",
+        type=int,
+        default=1,
+        help="Maximum number of target distance maps kept in memory for distance-based shaping.",
+    )
     parser.add_argument(
         "--checkpoint-output",
         type=Path,
@@ -81,6 +99,13 @@ def main() -> None:
         hidden_dim=args.hidden_dim,
     ).to(device)
     optimizer = torch.optim.AdamW(network.parameters(), lr=args.lr)
+    reward_shaper = build_reward_shaper(
+        mode=args.reward_shaping,
+        coef=args.reward_shaping_coef,
+        env=env,
+        embedding_config=args.embedding_config,
+        distance_cache_size=args.distance_cache_size,
+    )
 
     best_success = -1.0
     history: list[dict] = []
@@ -98,6 +123,7 @@ def main() -> None:
             her_k=args.her_k,
             her_coef=args.her_coef,
             device=device,
+            reward_shaper=reward_shaper,
         )
         eval_metrics = evaluate_policy(
             env=env,
@@ -141,6 +167,7 @@ def train_epoch(
     her_k: int,
     her_coef: float,
     device: torch.device,
+    reward_shaper: RewardShaper,
 ) -> dict:
     network.train()
     losses: list[float] = []
@@ -188,6 +215,11 @@ def train_epoch(
                 reward = -0.35
             elif dead_end:
                 reward = -0.2
+            reward += reward_shaper.delta(
+                current=current,
+                next_title=action,
+                target=example.target_title,
+            )
 
             done = reached_target or next_seen or dead_end
             with torch.no_grad():
@@ -240,6 +272,7 @@ def train_epoch(
                     her_k=her_k,
                     her_coef=her_coef,
                     device=device,
+                    reward_shaper=reward_shaper,
                 )
             )
         returns.append(episode_return)
@@ -262,6 +295,7 @@ def apply_hindsight_updates(
     her_k: int,
     her_coef: float,
     device: torch.device,
+    reward_shaper: RewardShaper,
 ) -> list[float]:
     losses: list[float] = []
     if her_k <= 0:
@@ -294,6 +328,17 @@ def apply_hindsight_updates(
                 dtype=torch.float32,
                 device=device,
             )
+            shaped_delta = reward_shaper.delta(
+                current=transition.current,
+                next_title=transition.next_title,
+                target=hindsight_goal,
+            )
+            if shaped_delta:
+                target_value = target_value + torch.tensor(
+                    shaped_delta,
+                    dtype=torch.float32,
+                    device=device,
+                )
             critic_loss = F.smooth_l1_loss(value.squeeze(), target_value)
             loss = her_coef * (actor_loss + 0.5 * critic_loss)
 

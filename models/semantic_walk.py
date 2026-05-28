@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from embed import EmbeddingModel
+from embed import CachedEmbedder, EmbeddingModel
 from similarity import get_vector_metric
 from utils import Action, Config, Page
 
@@ -32,6 +32,8 @@ class SemanticWalk(Model):
         self.embedder = EmbeddingModel(
             config=embed_config.data,
         )
+        self.query_prefix = None if isinstance(self.embedder.backend, CachedEmbedder) else self.QUERY_PREFIX
+        self.passage_prefix = None if isinstance(self.embedder.backend, CachedEmbedder) else self.PASSAGE_PREFIX
         self._history: set[str] = set()
 
     def begin_episode(self, start_title: str, target: str) -> None:
@@ -49,8 +51,8 @@ class SemanticWalk(Model):
         else:
             candidates = actions
 
-        target_vector = self.embedder.get_embed(target, prefix=self.QUERY_PREFIX)
-        candidate_vectors = self.embedder.get_embeds(candidates, prefix=self.PASSAGE_PREFIX)
+        target_vector = self.embedder.get_embed(target, prefix=self.query_prefix)
+        candidate_vectors = self.embedder.get_embeds(candidates, prefix=self.passage_prefix)
         scores = [self.metric(candidate_vector, target_vector) for candidate_vector in candidate_vectors]
         best_index = max(range(len(scores)), key=scores.__getitem__)
         chosen = candidates[best_index]

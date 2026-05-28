@@ -1,0 +1,2 @@
+checkpoint_path: checkpoints/her_hybrid_c01.pt
+device: auto

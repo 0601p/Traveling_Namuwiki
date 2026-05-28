@@ -1,0 +1,2 @@
+checkpoint_path: checkpoints/her_lexical_c02.pt
+device: auto

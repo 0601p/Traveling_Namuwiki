@@ -208,3 +208,227 @@ python train/train_linear_rl.py \
 `embedding-config` must point to a cached embedding config. `model-config`
 provides the optional initial `weights_path`; trained weights are written under
 `outputs/rl` by default.
+
+## Reproducing Completed Experiments
+
+The commands below reproduce the experiments that were actually completed in
+this repository state:
+
+- beam-search comparisons on the validation split with `limit=1000`
+- HER reward-shaping comparisons for `none`, `lexical`, and `hybrid`
+- distance-based shaping runs are intentionally excluded here because those
+  runs were not completed
+
+Before running the beam or `hybrid` experiments, update
+`config/embed/from-cache.yaml` so that `embeddings_path` points to your local
+embedding cache, or generate one first:
+
+```bash
+python generate_embeddings.py --embedding-config config/embed/on-the-fly.yaml
+```
+
+### Beam Search Validation Runs
+
+The baseline and beam variants below reproduce the validation runs whose
+metrics were saved under `outputs/*_val_1000_metrics.json`.
+
+#### Linear vs BeamLinear
+
+```bash
+python evaluate_paths.py \
+  --split validation \
+  --limit 1000 \
+  --model linear \
+  --embedding-config config/embed/from-cache.yaml \
+  --model-config config/model/linear.yaml \
+  --predictions-output outputs/linear_val_1000_predictions.jsonl \
+  --metrics-output outputs/linear_val_1000_metrics.json
+
+python evaluate_paths.py \
+  --split validation \
+  --limit 1000 \
+  --model beamlinear \
+  --embedding-config config/embed/from-cache.yaml \
+  --model-config config/model/beamlinear_bw1.yaml \
+  --predictions-output outputs/beamlinear_bw1_val_1000_predictions.jsonl \
+  --metrics-output outputs/beamlinear_bw1_val_1000_metrics.json
+
+python evaluate_paths.py \
+  --split validation \
+  --limit 1000 \
+  --model beamlinear \
+  --embedding-config config/embed/from-cache.yaml \
+  --model-config config/model/beamlinear_bw4.yaml \
+  --predictions-output outputs/beamlinear_bw4_val_1000_predictions.jsonl \
+  --metrics-output outputs/beamlinear_bw4_val_1000_metrics.json
+
+python evaluate_paths.py \
+  --split validation \
+  --limit 1000 \
+  --model beamlinear \
+  --embedding-config config/embed/from-cache.yaml \
+  --model-config config/model/beamlinear_bw8.yaml \
+  --predictions-output outputs/beamlinear_bw8_val_1000_predictions.jsonl \
+  --metrics-output outputs/beamlinear_bw8_val_1000_metrics.json
+```
+
+#### SemanticWalk vs BeamSemanticWalk
+
+```bash
+python evaluate_paths.py \
+  --split validation \
+  --limit 1000 \
+  --model semanticwalk \
+  --embedding-config config/embed/from-cache.yaml \
+  --model-config config/model/semanticwalk.yaml \
+  --predictions-output outputs/semantic_val_1000_predictions.jsonl \
+  --metrics-output outputs/semantic_val_1000_metrics.json
+
+python evaluate_paths.py \
+  --split validation \
+  --limit 1000 \
+  --model beamsemanticwalk \
+  --embedding-config config/embed/from-cache.yaml \
+  --model-config config/model/beamsemanticwalk_bw1.yaml \
+  --predictions-output outputs/beamsemantic_bw1_val_1000_predictions.jsonl \
+  --metrics-output outputs/beamsemantic_bw1_val_1000_metrics.json
+
+python evaluate_paths.py \
+  --split validation \
+  --limit 1000 \
+  --model beamsemanticwalk \
+  --embedding-config config/embed/from-cache.yaml \
+  --model-config config/model/beamsemanticwalk_bw4.yaml \
+  --predictions-output outputs/beamsemantic_bw4_val_1000_predictions.jsonl \
+  --metrics-output outputs/beamsemantic_bw4_val_1000_metrics.json
+
+python evaluate_paths.py \
+  --split validation \
+  --limit 1000 \
+  --model beamsemanticwalk \
+  --embedding-config config/embed/from-cache.yaml \
+  --model-config config/model/beamsemanticwalk_bw8.yaml \
+  --predictions-output outputs/beamsemantic_bw8_val_1000_predictions.jsonl \
+  --metrics-output outputs/beamsemantic_bw8_val_1000_metrics.json
+```
+
+#### LexicalSimilarityGreedy vs BeamLexicalSimilarityGreedy
+
+```bash
+python evaluate_paths.py \
+  --split validation \
+  --limit 1000 \
+  --model lexicalsimilaritygreedy \
+  --model-config config/model/lexicalsimilaritygreedy.yaml \
+  --predictions-output outputs/lexical_val_1000_predictions.jsonl \
+  --metrics-output outputs/lexical_val_1000_metrics.json
+
+python evaluate_paths.py \
+  --split validation \
+  --limit 1000 \
+  --model beamlexicalsimilaritygreedy \
+  --model-config config/model/beamlexicalsimilaritygreedy_bw1.yaml \
+  --predictions-output outputs/beamlexical_bw1_val_1000_predictions.jsonl \
+  --metrics-output outputs/beamlexical_bw1_val_1000_metrics.json
+
+python evaluate_paths.py \
+  --split validation \
+  --limit 1000 \
+  --model beamlexicalsimilaritygreedy \
+  --model-config config/model/beamlexicalsimilaritygreedy_bw4.yaml \
+  --predictions-output outputs/beamlexical_bw4_val_1000_predictions.jsonl \
+  --metrics-output outputs/beamlexical_bw4_val_1000_metrics.json
+
+python evaluate_paths.py \
+  --split validation \
+  --limit 1000 \
+  --model beamlexicalsimilaritygreedy \
+  --model-config config/model/beamlexicalsimilaritygreedy_bw8.yaml \
+  --predictions-output outputs/beamlexical_bw8_val_1000_predictions.jsonl \
+  --metrics-output outputs/beamlexical_bw8_val_1000_metrics.json
+```
+
+### HER Reward-Shaping Runs
+
+These runs use `train/train_hindsight_target_a2c_v2.py`. To avoid overwriting
+checkpoints, each command writes to its own file under `checkpoints/`.
+
+#### Training
+
+```bash
+python train/train_hindsight_target_a2c_v2.py \
+  --eval-limit 1000 \
+  --reward-shaping none \
+  --reward-shaping-coef 0.0 \
+  --checkpoint-output checkpoints/her_none.pt
+
+python train/train_hindsight_target_a2c_v2.py \
+  --eval-limit 1000 \
+  --reward-shaping lexical \
+  --reward-shaping-coef 0.1 \
+  --checkpoint-output checkpoints/her_lexical_c01.pt
+
+python train/train_hindsight_target_a2c_v2.py \
+  --eval-limit 1000 \
+  --reward-shaping lexical \
+  --reward-shaping-coef 0.2 \
+  --checkpoint-output checkpoints/her_lexical_c02.pt
+
+python train/train_hindsight_target_a2c_v2.py \
+  --eval-limit 1000 \
+  --reward-shaping hybrid \
+  --reward-shaping-coef 0.1 \
+  --embedding-config config/embed/from-cache.yaml \
+  --checkpoint-output checkpoints/her_hybrid_c01.pt
+
+python train/train_hindsight_target_a2c_v2.py \
+  --eval-limit 1000 \
+  --reward-shaping hybrid \
+  --reward-shaping-coef 0.2 \
+  --embedding-config config/embed/from-cache.yaml \
+  --checkpoint-output checkpoints/her_hybrid_c02.pt
+```
+
+#### Validation Evaluation
+
+```bash
+python evaluate_paths.py \
+  --split validation \
+  --limit 1000 \
+  --model hindsighttargeta2cv2 \
+  --model-config config/model/hindsighttargeta2cv2_none.yaml \
+  --predictions-output outputs/eval_her_none_val_1000_predictions.jsonl \
+  --metrics-output outputs/eval_her_none_val_1000_metrics.json
+
+python evaluate_paths.py \
+  --split validation \
+  --limit 1000 \
+  --model hindsighttargeta2cv2 \
+  --model-config config/model/hindsighttargeta2cv2_lexical_c01.yaml \
+  --predictions-output outputs/eval_her_lexical_c01_val_1000_predictions.jsonl \
+  --metrics-output outputs/eval_her_lexical_c01_val_1000_metrics.json
+
+python evaluate_paths.py \
+  --split validation \
+  --limit 1000 \
+  --model hindsighttargeta2cv2 \
+  --model-config config/model/hindsighttargeta2cv2_lexical_c02.yaml \
+  --predictions-output outputs/eval_her_lexical_c02_val_1000_predictions.jsonl \
+  --metrics-output outputs/eval_her_lexical_c02_val_1000_metrics.json
+
+python evaluate_paths.py \
+  --split validation \
+  --limit 1000 \
+  --model hindsighttargeta2cv2 \
+  --model-config config/model/hindsighttargeta2cv2_hybrid_c01.yaml \
+  --predictions-output outputs/eval_her_hybrid_c01_val_1000_predictions.jsonl \
+  --metrics-output outputs/eval_her_hybrid_c01_val_1000_metrics.json
+
+python evaluate_paths.py \
+  --split validation \
+  --limit 1000 \
+  --model hindsighttargeta2cv2 \
+  --model-config config/model/hindsighttargeta2cv2_hybrid_c02.yaml \
+  --predictions-output outputs/eval_her_hybrid_c02_val_1000_predictions.jsonl \
+  --metrics-output outputs/eval_her_hybrid_c02_val_1000_metrics.json
+```
