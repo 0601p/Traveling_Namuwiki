@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import warnings
+from typing import Any
 
 from utils import Action, Page, Title
 
@@ -13,6 +14,7 @@ MODEL_REGISTRY: dict[str, type[Model]] = {
 }
 _OPTIONAL_EXPORTS: list[str] = []
 
+
 try:
     from .ar_walk import AutoregressiveWalk
 except ImportError as exc:
@@ -22,11 +24,25 @@ except ImportError as exc:
         stacklevel=1,
     )
 else:
+    MODEL_REGISTRY["arwalk"] = AutoregressiveWalk
     MODEL_REGISTRY["ar_walk"] = AutoregressiveWalk
     _OPTIONAL_EXPORTS.append("AutoregressiveWalk")
 
+try:
+    from .ar_walk_attn import AutoregressiveWalkAttn
+except ImportError as exc:
+    warnings.warn(
+        "Skipping ar_walk_attn registration because optional dependencies are missing: "
+        f"{exc}",
+        stacklevel=1,
+    )
+else:
+    MODEL_REGISTRY["arwalkattn"] = AutoregressiveWalkAttn
+    MODEL_REGISTRY["ar_walk_attn"] = AutoregressiveWalkAttn
+    _OPTIONAL_EXPORTS.append("AutoregressiveWalkAttn")
 
-def create_model(name: str) -> Model:
+
+def create_model(name: str, **kwargs: Any) -> Model:
     normalized = name.strip().lower().replace("_", "").replace("-", "")
     normalized_registry = {
         key.replace("_", "").replace("-", ""): model_class
@@ -34,7 +50,7 @@ def create_model(name: str) -> Model:
     }
     if normalized not in normalized_registry:
         raise NotImplementedError(f"Unknown model: {name}")
-    return normalized_registry[normalized]()
+    return normalized_registry[normalized](**kwargs)
 
 
 def available_models() -> list[str]:

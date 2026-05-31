@@ -64,6 +64,10 @@ def normalize_model_name(name: str) -> str:
     return name.strip().lower().replace("_", "").replace("-", "")
 
 
+def uses_inference_device(model_name: str) -> bool:
+    return normalize_model_name(model_name) in {"arwalk", "arwalkattn"}
+
+
 def resolve_device(device: str) -> str:
     """Resolve the requested inference device."""
     if device != "auto":
@@ -85,7 +89,7 @@ def evaluate(args: argparse.Namespace) -> dict:
     env = NamuwikiEnvironment.from_dataset(args.actions_path)
     model_kwargs = {}
     device = None
-    if normalize_model_name(args.model) == "arwalk":
+    if uses_inference_device(args.model):
         device = resolve_device(args.device)
         model_kwargs["device"] = device
     model = create_model(args.model, **model_kwargs)
@@ -213,12 +217,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--device",
         default="auto",
-        help="Inference device for arwalk: auto, cpu, cuda, cuda:0, mps, etc.",
+        help="Inference device for neural models: auto, cpu, cuda, cuda:0, mps, etc.",
     )
     parser.add_argument(
         "--checkpoint",
         type=Path,
-        help="Checkpoint path for models that support saved weights, e.g. arwalk.",
+        help="Checkpoint path for models that support saved weights, e.g. arwalk or arwalkattn.",
     )
     parser.add_argument("--limit", type=int)
     parser.add_argument(

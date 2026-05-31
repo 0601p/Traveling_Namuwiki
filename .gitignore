@@ -19,3 +19,6 @@ predictions/
 *.jsonl.tmp
 
 .ipynb_checkpoints/
+
+*.sh
+*.out
