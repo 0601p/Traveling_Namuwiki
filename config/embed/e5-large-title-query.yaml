@@ -1,0 +1,12 @@
+use_cache: false
+actions_path: 0601p/Traveling_Namuwiki_Actions
+raw_path: null
+split: train
+output_path: outputs/title_embeddings_e5_large_query.jsonl
+model_name: intfloat/multilingual-e5-large
+device: null
+batch_size: 64
+normalize_embeddings: true
+text_source: title
+prefix: query
+cache_inferred: false
